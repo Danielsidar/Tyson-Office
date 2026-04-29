@@ -1,36 +1,77 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Tyson Virtual Office 🏢
 
-## Getting Started
+משרד דיגיטלי 2D פנימי לטייסון. עובדים נכנסים, יושבים בקוביה, ויכולים "לדפוק בדלת" של מישהו אחר כדי לפתוח שיחת וידאו.
 
-First, run the development server:
+## איך זה עובד
+
+- **Frontend:** Next.js 16 + React + Tailwind v4
+- **Backend:** Convex (presence, knocks, WebRTC signaling) — בלי DB מסורתי
+- **Video:** WebRTC peer-to-peer (Convex משמש רק לסיגנלינג)
+
+## הרצה ראשונה
+
+זה דורש שני שלבים בפעם הראשונה (אחרי זה רק `npm run dev`):
+
+### 1. אתחול Convex
+
+הרץ בטרמינל:
+
+```bash
+npx convex dev
+```
+
+מה שיקרה:
+1. ייפתח דפדפן עם בקשת login לחשבון Convex (חינמי).
+2. תתבקש לבחור / ליצור פרויקט. צור חדש בשם `tyson-virtual-office`.
+3. ה-CLI ייצור אוטומטית `.env.local` עם `NEXT_PUBLIC_CONVEX_URL=...`.
+4. הוא יידחוף את הסכמה (presence/knocks/signals) ויישאר רץ.
+
+**השאר את החלון הזה פתוח** - הוא ה-watcher שמסנכרן שינויים ב-`convex/*.ts` ל-deployment.
+
+### 2. הרצת Next.js
+
+בטרמינל **שני**:
 
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+פתח [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## איך לבדוק
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+כדי לראות את הקסם של הזמן-אמת:
+1. פתח את האתר בחלון רגיל - בחר שם ואווטאר → תיכנס למשרד.
+2. פתח את האתר ב-**חלון גלישה בסתר** או דפדפן אחר - בחר שם אחר.
+3. בחלון הראשון, לחץ על הקוביה של החלון השני → דפיקה בדלת.
+4. בחלון השני - אישור → שיחת וידאו נפתחת.
 
-## Learn More
+## מבנה
 
-To learn more about Next.js, take a look at the following resources:
+```
+app/
+  page.tsx           ← מסך כניסה / משרד (state machine)
+  layout.tsx         ← Convex provider + RTL
+components/
+  EntryScreen.tsx    ← בחירת שם + אווטאר
+  Office.tsx         ← מרכיב הראשי (כותרת + מפה + knocks + שיחה)
+  OfficeMap.tsx      ← הגריד עם הקוביות
+  KnockToast.tsx     ← התראות דפיקה (נכנסת/יוצאת)
+  VideoCall.tsx      ← מודאל שיחת וידאו עם פקדים
+convex/
+  schema.ts          ← presence / knocks / signals
+  presence.ts        ← join / heartbeat / leave / list
+  knocks.ts          ← knock / respond / list
+  signals.ts         ← WebRTC offer/answer/ICE
+lib/
+  webrtc.ts          ← VideoPeer wrapper מעל RTCPeerConnection
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## רעיונות להמשך
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- חדר ישיבות אמיתי (3+ משתתפים, צריך SFU כמו LiveKit)
+- שיתוף מסך
+- "מטבח" וירטואלי - חלל פתוח לשיחות ספונטניות
+- סטטוסים: בפגישה / אל תפריע / בהפסקה
+- אינטגרציה עם ה-CRM של טייסון (להראות ליד מי כל אחד עובד)
+- אווטארים שזזים על המפה (במקום מיקום קבוע)
