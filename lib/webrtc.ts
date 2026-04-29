@@ -3,26 +3,22 @@
 
 // STUN handles the easy NAT cases. TURN is the fallback when both peers are
 // behind symmetric / restrictive NATs and can't reach each other directly.
-// These OpenRelay TURN servers are public/free and meant for testing — fine
-// for an internal team, swap for self-hosted coturn or Twilio if usage grows.
+// TURN credentials can be supplied at runtime via env vars at build time.
+// (NEXT_PUBLIC_TURN_URL / NEXT_PUBLIC_TURN_USERNAME / NEXT_PUBLIC_TURN_CREDENTIAL)
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
-  {
-    urls: "turn:openrelay.metered.ca:80",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
-  {
-    urls: "turn:openrelay.metered.ca:443?transport=tcp",
-    username: "openrelayproject",
-    credential: "openrelayproject",
-  },
+  { urls: "stun:stun2.l.google.com:19302" },
+  { urls: "stun:stun.cloudflare.com:3478" },
+  ...(process.env.NEXT_PUBLIC_TURN_URL
+    ? [
+        {
+          urls: process.env.NEXT_PUBLIC_TURN_URL,
+          username: process.env.NEXT_PUBLIC_TURN_USERNAME,
+          credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
+        } as RTCIceServer,
+      ]
+    : []),
 ];
 
 export type SignalSender = (
@@ -69,8 +65,24 @@ export class VideoPeer {
 
     this.pc.onicecandidate = (e) => {
       if (e.candidate) {
-        handlers.sendSignal("ice", JSON.stringify(e.candidate.toJSON()));
+        // Log the type so we can see whether we're getting TURN relay candidates.
+        // host = local network, srflx = STUN-discovered public IP, relay = TURN.
+        // If only host/srflx and peers are behind symmetric NAT, the call fails.
+        const c = e.candidate;
+        console.log(
+          `[VideoPeer] local ICE candidate: type=${c.type} protocol=${c.protocol} address=${c.address ?? "?"}`
+        );
+        handlers.sendSignal("ice", JSON.stringify(c.toJSON()));
+      } else {
+        console.log("[VideoPeer] ICE gathering complete");
       }
+    };
+
+    this.pc.onicegatheringstatechange = () => {
+      console.log(
+        "[VideoPeer] iceGatheringState ->",
+        this.pc.iceGatheringState
+      );
     };
 
     this.pc.onconnectionstatechange = () => {
