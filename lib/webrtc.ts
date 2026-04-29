@@ -3,23 +3,29 @@
 
 // STUN handles the easy NAT cases. TURN is the fallback when both peers are
 // behind symmetric / restrictive NATs and can't reach each other directly.
-// TURN credentials can be supplied at runtime via env vars at build time.
-// (NEXT_PUBLIC_TURN_URL / NEXT_PUBLIC_TURN_USERNAME / NEXT_PUBLIC_TURN_CREDENTIAL)
+// TURN credentials are pulled from env vars at build time so we don't bake
+// per-account credentials into the repo. We try several Metered TURN URLs in
+// parallel - UDP, TCP, and TLS over 443 - so corporate firewalls that block
+// UDP can still get through.
+const TURN_USERNAME = process.env.NEXT_PUBLIC_TURN_USERNAME;
+const TURN_CREDENTIAL = process.env.NEXT_PUBLIC_TURN_CREDENTIAL;
+
+const meteredTurn = (url: string): RTCIceServer | null =>
+  TURN_USERNAME && TURN_CREDENTIAL
+    ? { urls: url, username: TURN_USERNAME, credential: TURN_CREDENTIAL }
+    : null;
+
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
   { urls: "stun:stun2.l.google.com:19302" },
   { urls: "stun:stun.cloudflare.com:3478" },
-  ...(process.env.NEXT_PUBLIC_TURN_URL
-    ? [
-        {
-          urls: process.env.NEXT_PUBLIC_TURN_URL,
-          username: process.env.NEXT_PUBLIC_TURN_USERNAME,
-          credential: process.env.NEXT_PUBLIC_TURN_CREDENTIAL,
-        } as RTCIceServer,
-      ]
-    : []),
-];
+  { urls: "stun:stun.relay.metered.ca:80" },
+  meteredTurn("turn:global.relay.metered.ca:80"),
+  meteredTurn("turn:global.relay.metered.ca:80?transport=tcp"),
+  meteredTurn("turn:global.relay.metered.ca:443"),
+  meteredTurn("turns:global.relay.metered.ca:443?transport=tcp"),
+].filter((s): s is RTCIceServer => s !== null);
 
 export type SignalSender = (
   type: "offer" | "answer" | "ice" | "hangup",
