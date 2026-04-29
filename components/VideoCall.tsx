@@ -33,6 +33,9 @@ export function VideoCall({
   const [muted, setMuted] = useState(false);
   const [videoOff, setVideoOff] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Flips true once the peer has been constructed; the signals effect listens
+  // to this so any signals that arrived before init don't get dropped.
+  const [peerReady, setPeerReady] = useState(false);
 
   const sendSignal = useMutation(api.signals.send);
   const consumeSignal = useMutation(api.signals.consume);
@@ -77,6 +80,7 @@ export function VideoCall({
             }),
         });
         peerRef.current = peer;
+        setPeerReady(true);
 
         await setInCall({ sessionId: mySessionId, peerSessionId });
         await peer.start();
@@ -88,6 +92,7 @@ export function VideoCall({
 
     return () => {
       cancelled = true;
+      setPeerReady(false);
       peerRef.current?.close();
       localStreamRef.current?.getTracks().forEach((t) => t.stop());
       setInCall({ sessionId: mySessionId, peerSessionId: null });
@@ -96,14 +101,16 @@ export function VideoCall({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [peerSessionId]);
 
-  // Apply incoming signals
+  // Apply incoming signals — only once the peer has been constructed,
+  // otherwise we'd drop any signals that arrive before getUserMedia resolves.
   useEffect(() => {
-    if (!incomingSignals || !peerRef.current) return;
+    if (!peerReady || !incomingSignals || !peerRef.current) return;
     for (const s of incomingSignals) {
       const id = s._id as unknown as string;
       if (handledSignals.current.has(id)) continue;
       if (s.fromSessionId !== peerSessionId) continue;
       handledSignals.current.add(id);
+      console.log("[VideoCall] handling signal", s.type, "from", s.fromSessionId);
       peerRef.current.handleSignal(s.type, s.payload);
       if (s.type === "hangup") {
         setStatus("ended");
@@ -111,7 +118,7 @@ export function VideoCall({
       // Consume so it doesn't pile up
       consumeSignal({ signalId: s._id as Id<"signals"> }).catch(() => {});
     }
-  }, [incomingSignals, peerSessionId, consumeSignal]);
+  }, [peerReady, incomingSignals, peerSessionId, consumeSignal]);
 
   function hangup() {
     sendSignal({

@@ -1,9 +1,28 @@
 // Lightweight WebRTC peer wrapper that uses Convex as the signaling channel.
 // One peer is the "initiator" - it creates the offer. The other one answers.
 
+// STUN handles the easy NAT cases. TURN is the fallback when both peers are
+// behind symmetric / restrictive NATs and can't reach each other directly.
+// These OpenRelay TURN servers are public/free and meant for testing — fine
+// for an internal team, swap for self-hosted coturn or Twilio if usage grows.
 const ICE_SERVERS: RTCIceServer[] = [
   { urls: "stun:stun.l.google.com:19302" },
   { urls: "stun:stun1.l.google.com:19302" },
+  {
+    urls: "turn:openrelay.metered.ca:80",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
+  {
+    urls: "turn:openrelay.metered.ca:443?transport=tcp",
+    username: "openrelayproject",
+    credential: "openrelayproject",
+  },
 ];
 
 export type SignalSender = (
@@ -56,10 +75,18 @@ export class VideoPeer {
 
     this.pc.onconnectionstatechange = () => {
       const state = this.pc.connectionState;
+      console.log("[VideoPeer] connectionState ->", state);
       if (state === "connected") handlers.onConnected?.();
       if (state === "failed" || state === "disconnected" || state === "closed") {
         handlers.onDisconnected?.();
       }
+    };
+
+    this.pc.oniceconnectionstatechange = () => {
+      console.log(
+        "[VideoPeer] iceConnectionState ->",
+        this.pc.iceConnectionState
+      );
     };
   }
 
